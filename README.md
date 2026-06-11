@@ -37,22 +37,39 @@ PREDICTORS IN TRAINING AND TEST DATA
 All variables below are present in wcv_train and wcv_test as float64. MRN is a patient identifier and is removed before model fitting. missed is the outcome.
 
 MRN: Patient identifier (not used in modeling) 
+
 timepoint: Expected AAP visit month (0, 1, 2, 4, 6, 9, 12) 
+
 visit_delay: Months between expected timepoint and actual visit age 
+
 sch_lead_days: Days between scheduling date and visit date 
+
 new_to_dpt: First visit at this clinic (binary) 
+
 portal_active: Patient portal active at time of scheduling (binary) 
+
 male: Patient sex is male (binary) 
+
 medicaid: Medicaid insurance (binary) 
+
 attending: Treating provider is an attending physician (binary) 
+
 physician: Treating provider is a physician (attending, resident, or fellow) vs. nurse practitioner (binary) 
+
 prior_ed_visit: Any in-system ED visit before the current visit date (binary) 
+
 imm_refusal: Documented immunization refusal on or before the current visit date (binary) 
+
 prior_noshow: Any no-show appointment before the current visit date (binary) 
+
 any_prior_missed: Any prior missed well-child visit within the dataset (binary) 
+
 has_birth: Birth record exists in the health system (binary) 
+
 nicu: NICU admission; 0 if no birth record (binary) 
+
 lbw: Low birth weight, less than 2500g; 0 if no birth record (binary) 
+
 preterm: Preterm birth, less than 37 weeks gestation; 0 if no birth record (binary) 
 
 DEMOGRAPHIC VARIABLES
