@@ -1,4 +1,3 @@
-[README.txt](https://github.com/user-attachments/files/28852862/README.txt)
 Predicting Infant Nonattendance at the Next Recommended Well-Child Visit: Model Development and Validation
 
 OVERVIEW
