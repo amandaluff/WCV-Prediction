@@ -126,9 +126,133 @@ def print_average_precision(oof_files, model_files, X_test, Y_test):
         print(f"{name}: {ap:.4f}")
 
 # -----------------------------
+# PERFORMANCE TABLES WITH 95% CIs
+# -----------------------------
+from sklearn.metrics import roc_auc_score
+
+METRIC_ORDER = [
+    'AUC', 'Average Precision', 'Accuracy', 'Balanced Accuracy',
+    'Sensitivity (Recall)', 'Specificity', 'PPV (Precision)', 'NPV', 'F1'
+]
+
+def compute_metrics_at_threshold(y_true, y_proba, threshold):
+    y_pred = (y_proba >= threshold).astype(int)
+    tn, fp, fn, tp = confusion_matrix(y_true, y_pred).ravel()
+
+    sens    = tp / (tp + fn) if (tp + fn) > 0 else np.nan
+    spec    = tn / (tn + fp) if (tn + fp) > 0 else np.nan
+    ppv     = tp / (tp + fp) if (tp + fp) > 0 else np.nan
+    npv     = tn / (tn + fn) if (tn + fn) > 0 else np.nan
+    f1      = 2 * tp / (2 * tp + fp + fn) if (2 * tp + fp + fn) > 0 else np.nan
+    bal_acc = (sens + spec) / 2
+    acc     = (tp + tn) / (tp + tn + fp + fn)
+
+    return {
+        'AUC':                  roc_auc_score(y_true, y_proba),
+        'Average Precision':    average_precision_score(y_true, y_proba),
+        'Accuracy':             acc,
+        'Balanced Accuracy':    bal_acc,
+        'Sensitivity (Recall)': sens,
+        'Specificity':          spec,
+        'PPV (Precision)':      ppv,
+        'NPV':                  npv,
+        'F1':                   f1
+    }
+
+def find_best_f1_threshold(y_true, y_proba):
+    prec, rec, thresholds = precision_recall_curve(y_true, y_proba)
+    f1 = 2 * prec[:-1] * rec[:-1] / (prec[:-1] + rec[:-1] + 1e-10)
+    return thresholds[np.argmax(f1)]
+
+
+def bootstrap_metrics(y_true, y_proba, threshold, n_boot=2000, seed=42):
+    rng = np.random.RandomState(seed)
+    y_true  = np.asarray(y_true)
+    y_proba = np.asarray(y_proba)
+    n = len(y_true)
+
+    boot_records = []
+    for _ in range(n_boot):
+        idx = rng.choice(n, size=n, replace=True)
+        if len(np.unique(y_true[idx])) < 2:
+            continue
+        boot_records.append(
+            compute_metrics_at_threshold(y_true[idx], y_proba[idx], threshold)
+        )
+
+    boot_df = pd.DataFrame(boot_records)
+    point   = compute_metrics_at_threshold(y_true, y_proba, threshold)
+
+    row = {}
+    for m in METRIC_ORDER:
+        lo = boot_df[m].quantile(0.025)
+        hi = boot_df[m].quantile(0.975)
+        row[m] = f"{point[m]:.4f} ({lo:.4f}, {hi:.4f})"
+    row['Threshold'] = f"{threshold:.4f}"
+    return row
+
+
+def build_performance_table(oof_files, model_files, X_test, Y_test,
+                            use_f1_threshold=True, n_boot=2000):
+    rows = []
+    index_tuples = []
+
+    # Internal validation (OOF)
+    for name, path in oof_files.items():
+        df = pd.read_parquet(path)
+        y_true  = df['true_label'].values
+        y_proba = df['pred_proba'].values
+
+        thresh = find_best_f1_threshold(y_true, y_proba) if use_f1_threshold else 0.5
+        rows.append(bootstrap_metrics(y_true, y_proba, thresh, n_boot))
+        index_tuples.append(
+            ('Internal Validation (Practice A, Out-of-Fold)', name)
+        )
+
+    # External validation (Test)
+    for name, path in model_files.items():
+        model   = joblib.load(path)
+        y_proba = model.predict_proba(X_test)[:, 1]
+        y_true  = Y_test.values
+
+        thresh = find_best_f1_threshold(y_true, y_proba) if use_f1_threshold else 0.5
+        rows.append(bootstrap_metrics(y_true, y_proba, thresh, n_boot))
+        index_tuples.append(('External Validation (Practice B)', name))
+
+    col_order = ['Threshold'] + METRIC_ORDER
+    result = pd.DataFrame(rows, columns=col_order)
+    result.index = pd.MultiIndex.from_tuples(
+        index_tuples, names=['Validation Set', 'Model']
+    )
+    return result
+
+# -----------------------------
 # RUN ALL
 # -----------------------------
+
 if __name__ == "__main__":
     plot_roc_curves(oof_files, model_files, X_test, Y_test)
     plot_pr_curves(oof_files, model_files, X_test, Y_test)
     print_average_precision(oof_files, model_files, X_test, Y_test)
+
+    # Table 1: F1-maximizing threshold
+    table_f1 = build_performance_table(
+        oof_files, model_files, X_test, Y_test,
+        use_f1_threshold=True, n_boot=2000
+    )
+    print("\n" + "=" * 130)
+    print("Table 1: Performance at F1-Maximizing Threshold (95% CI)")
+    print("=" * 130)
+    print(table_f1.to_string())
+    table_f1.to_csv('performance_f1_threshold.csv')
+
+    # Table 2: Fixed 0.5 threshold
+    table_50 = build_performance_table(
+        oof_files, model_files, X_test, Y_test,
+        use_f1_threshold=False, n_boot=2000
+    )
+    print("\n" + "=" * 130)
+    print("Table 2: Performance at 0.5 Threshold (95% CI)")
+    print("=" * 130)
+    print(table_50.to_string())
+    table_50.to_csv('performance_05_threshold.csv')
