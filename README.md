@@ -71,42 +71,39 @@ CODE FILES
    Merging, data cleaning, and feature creation from files exported from SlicerDicer. Outputs train, test, demographic, and full analytic datasets to parquet files.
 
 2. wcv_lr.py
-   Modeling and diagnostics for regularized logistic regression (LASSO).
+   Model training, hyperparameter tuning, and interpretability for regularized logistic regression (LASSO).
 
 3. wcv_rf.py
-   Modeling and diagnostics for random forest.
+   Model training, hyperparameter tuning, and interpretability for random forest.
 
 4. wcv_xgb.py
-   Modeling and diagnostics for XGBoost.
+   Model training, hyperparameter tuning, and interpretability for XGBoost.
 
 5. wcv_diagnostic_plots.py
-   Combined diagnostic plots across all three models.
+   Combined diagnostic plots and performance metric tables across all three models.
 
 6. wcv_fairness.py
    Subgroup performance assessment by race/ethnicity, preferred language, and insurance type using the external validation set.
 
-
 MODELING WORKFLOW
 
 Each modeling file (wcv_lr.py, wcv_rf.py, wcv_xgb.py) contains the following steps:
-- Import packages
-- Read training parquet
+- Read training and test parquet files
 - Create pipeline (SMOTE for tree-based models; class_weight='balanced' for logistic regression)
 - Set up group k-fold cross-validation grouped by patient (MRN)
 - Randomized hyperparameter search scored on average precision
 - Fit best estimator
 - Save fitted model to pickle
-- Generate and save out-of-fold predictions
-- Evaluate out-of-fold and external test set performance: AUC, average precision, sensitivity, specificity, balanced accuracy, PPV, NPV, F1
-- Compute metrics at multiple classification thresholds and identify threshold maximizing F1
-- Calculate feature importance (Gini importance for RF) and permutation importance
+- Generate and save out-of-fold predictions to parquet
+- Calculate feature importance (coefficients for logistic regression; Gini importance for RF and XGBoost) and permutation importance
 - Calculate and plot SHAP beeswarm values for out-of-fold and test sets
 
-The diagnostic plot file (wcv_diagnostic_plots.py) contains:
-- Combined ROC curves across all three models
-- Combined precision-recall curves across all three models
-- Average precision values for all models
+The diagnostic plot and evaluation file (wcv_diagnostic_plots.py) contains:
+- Combined ROC curves across all three models for internal and external validation
+- Combined precision-recall curves across all three models for internal and external validation
+- Performance metric tables (AUC, average precision, accuracy, balanced accuracy, sensitivity, specificity, PPV, NPV, F1) with 95% bootstrap confidence intervals (2,000 replicates)
+- Metrics reported at the F1-maximizing threshold (primary) and at a 0.5 threshold (secondary)
 
 FAIRNESS ASSESSMENT
 
-The fairness assessment (wcv_fairness.py) computes AUC and average precision stratified by race/ethnicity, preferred language, and insurance type for all three models in the external validation set. Demographic variables are merged from wcv_demo onto the scored test set predictions. 
+The fairness assessment (wcv_fairness.py) computes AUC stratified by race/ethnicity, preferred language, and insurance type for all three models in the external validation set, with 95% bootstrap confidence intervals (2,000 replicates). Demographic variables are merged from wcv_demo onto the scored test set predictions.
